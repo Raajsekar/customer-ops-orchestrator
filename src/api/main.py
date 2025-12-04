@@ -1,3 +1,4 @@
+# src/api/main.py
 from fastapi import FastAPI
 from pydantic import BaseModel
 import uuid
@@ -8,9 +9,14 @@ load_dotenv()
 
 print(">>> Loaded ENV. DISABLE_AWS =", os.getenv("DISABLE_AWS"))
 
-# --- Correct Langfuse API ---
+# Correct Langfuse import
 from langfuse import Langfuse
-langfuse = Langfuse()
+
+langfuse = Langfuse(
+    public_key=os.getenv("LANGFUSE_PUBLIC_KEY"),
+    secret_key=os.getenv("LANGFUSE_SECRET_KEY"),
+    host=os.getenv("LANGFUSE_BASE_URL", "https://cloud.langfuse.com")
+)
 
 from ..models.ticket_state import TicketState
 from ..graph.workflow import build_graph
@@ -42,7 +48,7 @@ class TicketResponse(BaseModel):
 def root():
     return {
         "message": "Customer Ops Orchestrator is running!",
-        "endpoints": ["/health", "/tickets", "/docs", "/redoc"]
+        "endpoints": ["/health", "/tickets", "/docs"]
     }
 
 
@@ -54,14 +60,11 @@ def health():
 @app.post("/tickets", response_model=TicketResponse)
 def create_ticket(req: CreateTicketRequest):
 
-    trace_id = str(uuid.uuid4())
-
-    # Create Langfuse trace
-    trace = langfuse.create_trace(
-        id=trace_id,
+    # Create trace correctly
+    trace = langfuse.trace(
         name="ticket_flow",
         input=req.model_dump(),
-        user_id=req.user_id
+        metadata={"user_id": req.user_id}
     )
 
     ticket = TicketState(
@@ -71,8 +74,17 @@ def create_ticket(req: CreateTicketRequest):
         description=req.description,
     )
 
+    # Run LangGraph workflow
     result = graph.invoke({"ticket": ticket})
     t = result["ticket"]
+
+    # Record workflow result step
+    trace.generation(
+        name="workflow_output",
+        model="orchestrator",
+        input=ticket.model_dump(),
+        output=t.model_dump()
+    )
 
     # End trace
     trace.end(output=t.model_dump())
@@ -84,5 +96,5 @@ def create_ticket(req: CreateTicketRequest):
         draft_answer=t.draft_answer,
         final_answer=t.final_answer,
         metadata=t.metadata,
-        trace_id=trace_id
+        trace_id=trace.id
     )
