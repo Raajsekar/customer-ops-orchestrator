@@ -1,0 +1,17 @@
+[
+  {
+    "id": "hr_leave_policy",
+    "category": "HR",
+    "content": "For planned leave, employees must request approval at least 3 working days in advance."
+  },
+  {
+    "id": "tech_vpn_setup",
+    "category": "TECH",
+    "content": "If VPN is not working, verify your internet connection, then reinstall the VPN client and try again."
+  },
+  {
+    "id": "finance_reimbursement",
+    "category": "FINANCE",
+    "content": "Submit your reimbursement request within 30 days with original receipts via the Finance portal."
+  }
+]
