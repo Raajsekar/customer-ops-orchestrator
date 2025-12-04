@@ -2,17 +2,24 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 import uuid
 import os
-
-# Load environment
 from dotenv import load_dotenv
+
 load_dotenv()
 
-print(">>> Loaded ENV. DISABLE_AWS =", os.getenv("DISABLE_AWS"))
+# -------------------------------
+# Langfuse (correct import)
+# -------------------------------
+from langfuse import Langfuse
 
-# Langfuse (correct modern API)
-from langfuse.callback import CallbackHandler
-langfuse_handler = CallbackHandler()
+langfuse = Langfuse(
+    public_key=os.getenv("LANGFUSE_PUBLIC_KEY"),
+    secret_key=os.getenv("LANGFUSE_SECRET_KEY"),
+    host=os.getenv("LANGFUSE_BASE_URL", "https://cloud.langfuse.com")
+)
 
+# -------------------------------
+# Local imports
+# -------------------------------
 from ..models.ticket_state import TicketState
 from ..graph.workflow import build_graph
 
@@ -24,12 +31,10 @@ app = FastAPI(
 
 graph = build_graph()
 
-
 class CreateTicketRequest(BaseModel):
     user_id: str | None = None
     title: str
     description: str
-
 
 class TicketResponse(BaseModel):
     ticket_id: str
@@ -56,14 +61,17 @@ def health():
 
 @app.post("/tickets", response_model=TicketResponse)
 def create_ticket(req: CreateTicketRequest):
+
     trace_id = str(uuid.uuid4())
 
-    # ---- START LANGFUSE TRACE ----
-    langfuse_handler.create_trace(
+    # ---------------------------
+    # Start Langfuse Trace
+    # ---------------------------
+    trace = langfuse.trace(
         id=trace_id,
         name="ticket_flow",
-        metadata={"user_id": req.user_id},
         input=req.model_dump(),
+        metadata={"user_id": req.user_id},
     )
 
     ticket = TicketState(
@@ -76,12 +84,8 @@ def create_ticket(req: CreateTicketRequest):
     result = graph.invoke({"ticket": ticket})
     t = result["ticket"]
 
-    # ---- END LANGFUSE TRACE ----
-    langfuse_handler.end_trace(
-        trace_id=trace_id,
-        output=t.model_dump()
-    )
-    langfuse_handler.flush()
+    trace.update(output=t.model_dump())
+    trace.end()
 
     return TicketResponse(
         ticket_id=t.ticket_id,
@@ -90,5 +94,5 @@ def create_ticket(req: CreateTicketRequest):
         draft_answer=t.draft_answer,
         final_answer=t.final_answer,
         metadata=t.metadata,
-        trace_id=trace_id,
+        trace_id=trace_id
     )
