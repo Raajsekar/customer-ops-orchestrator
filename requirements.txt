@@ -9,3 +9,4 @@ httpx
 boto3
 langfuse
 langsmith
+langfuse==2.27.0
