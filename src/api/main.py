@@ -3,25 +3,18 @@ from pydantic import BaseModel
 import uuid
 import os
 
-# ENV
 from dotenv import load_dotenv
 load_dotenv()
 
 print(">>> Loaded ENV. DISABLE_AWS =", os.getenv("DISABLE_AWS"))
 
-# --- Langfuse (CORRECT USAGE) ---
+# --- Correct Langfuse API ---
 from langfuse import Langfuse
-langfuse = Langfuse(
-    public_key=os.getenv("LANGFUSE_PUBLIC_KEY"),
-    secret_key=os.getenv("LANGFUSE_SECRET_KEY"),
-    host=os.getenv("LANGFUSE_BASE_URL")
-)
+langfuse = Langfuse()
 
-# --- Internal Modules ---
 from ..models.ticket_state import TicketState
 from ..graph.workflow import build_graph
 
-# FastAPI App
 app = FastAPI(
     title="Customer Operations Orchestrator",
     version="1.0.0",
@@ -30,10 +23,6 @@ app = FastAPI(
 
 graph = build_graph()
 
-
-# -------------------------------
-# MODELS
-# -------------------------------
 class CreateTicketRequest(BaseModel):
     user_id: str | None = None
     title: str
@@ -42,19 +31,18 @@ class CreateTicketRequest(BaseModel):
 class TicketResponse(BaseModel):
     ticket_id: str
     status: str
-    category: str | None
-    draft_answer: str | None
-    final_answer: str | None
-    metadata: dict | None
-    trace_id: str | None
+    category: str | None = None
+    draft_answer: str | None = None
+    final_answer: str | None = None
+    metadata: dict | None = None
+    trace_id: str | None = None
 
 
-# -------------------------------
 @app.get("/")
 def root():
     return {
         "message": "Customer Ops Orchestrator is running!",
-        "endpoints": ["/health", "/tickets", "/docs"]
+        "endpoints": ["/health", "/tickets", "/docs", "/redoc"]
     }
 
 
@@ -63,22 +51,19 @@ def health():
     return {"status": "ok"}
 
 
-# -------------------------------
-# MAIN WORKFLOW
-# -------------------------------
 @app.post("/tickets", response_model=TicketResponse)
 def create_ticket(req: CreateTicketRequest):
 
-    # Create trace properly
     trace_id = str(uuid.uuid4())
-    trace = langfuse.trace.create(
+
+    # Create Langfuse trace
+    trace = langfuse.create_trace(
         id=trace_id,
         name="ticket_flow",
         input=req.model_dump(),
-        metadata={"user_id": req.user_id}
+        user_id=req.user_id
     )
 
-    # Build ticket object
     ticket = TicketState(
         ticket_id=str(uuid.uuid4()),
         user_id=req.user_id,
@@ -86,13 +71,11 @@ def create_ticket(req: CreateTicketRequest):
         description=req.description,
     )
 
-    # Run graph
     result = graph.invoke({"ticket": ticket})
     t = result["ticket"]
 
     # End trace
-    trace.update(output=t.model_dump())
-    langfuse.flush()
+    trace.end(output=t.model_dump())
 
     return TicketResponse(
         ticket_id=t.ticket_id,
