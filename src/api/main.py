@@ -1,24 +1,28 @@
-from fastapi import FastAPI, Response
+from fastapi import FastAPI
 from pydantic import BaseModel
 import uuid
+import os
+
+# Load environment
+from dotenv import load_dotenv
+load_dotenv()
+
+print(">>> Loaded ENV. DISABLE_AWS =", os.getenv("DISABLE_AWS"))
+
+# Langfuse (correct modern API)
+from langfuse.callback import CallbackHandler
+langfuse_handler = CallbackHandler()
 
 from ..models.ticket_state import TicketState
 from ..graph.workflow import build_graph
-from ..observability.langfuse_client import get_langfuse
-from ..observability.langsmith_client import get_langsmith
-from dotenv import load_dotenv
-
-load_dotenv()
 
 app = FastAPI(
     title="Customer Operations Orchestrator",
-    version="0.1.0",
-    description="Multi-agent ticket workflow: Classifier → Resolver → Verifier",
+    version="1.0.0",
+    description="Multi-agent workflow: Classifier → Resolver → Verifier",
 )
 
 graph = build_graph()
-langfuse = get_langfuse()
-langsmith = get_langsmith()
 
 
 class CreateTicketRequest(BaseModel):
@@ -37,27 +41,30 @@ class TicketResponse(BaseModel):
     trace_id: str | None = None
 
 
+@app.get("/")
+def root():
+    return {
+        "message": "Customer Ops Orchestrator is running!",
+        "endpoints": ["/health", "/tickets", "/docs", "/redoc"]
+    }
+
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+
 @app.post("/tickets", response_model=TicketResponse)
-def create_ticket(req: CreateTicketRequest, response: Response):
+def create_ticket(req: CreateTicketRequest):
     trace_id = str(uuid.uuid4())
 
-    lf_trace = None
-    ls_run = None
-
-    if langfuse:
-        lf_trace = langfuse.trace(
-            name="ticket_flow",
-            id=trace_id,
-            input=req.model_dump(),
-        )
-
-    if langsmith:
-        ls_run = langsmith.create_run(
-            name="ticket_flow",
-            run_type="chain",
-            inputs=req.model_dump(),
-            id=trace_id,
-        )
+    # ---- START LANGFUSE TRACE ----
+    langfuse_handler.create_trace(
+        id=trace_id,
+        name="ticket_flow",
+        metadata={"user_id": req.user_id},
+        input=req.model_dump(),
+    )
 
     ticket = TicketState(
         ticket_id=str(uuid.uuid4()),
@@ -66,16 +73,15 @@ def create_ticket(req: CreateTicketRequest, response: Response):
         description=req.description,
     )
 
-    # Run through LangGraph
     result = graph.invoke({"ticket": ticket})
     t = result["ticket"]
 
-    if lf_trace:
-        lf_trace.update(output=t.model_dump())
-    if ls_run:
-        ls_run.end(outputs=t.model_dump())
-
-    response.headers["X-Trace-Id"] = trace_id
+    # ---- END LANGFUSE TRACE ----
+    langfuse_handler.end_trace(
+        trace_id=trace_id,
+        output=t.model_dump()
+    )
+    langfuse_handler.flush()
 
     return TicketResponse(
         ticket_id=t.ticket_id,
@@ -86,14 +92,3 @@ def create_ticket(req: CreateTicketRequest, response: Response):
         metadata=t.metadata,
         trace_id=trace_id,
     )
-
-
-@app.get("/health")
-def health():
-    return {"status": "ok"}
-@app.get("/")
-def root():
-    return {
-        "message": "Customer Ops Orchestrator is running!",
-        "endpoints": ["/health", "/tickets", "/docs"]
-    }
