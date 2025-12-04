@@ -1,17 +1,20 @@
 version: 1.0
 runtime: python3
+
 build:
-  commands:
-    - pip install --upgrade pip
-    - pip install -r requirements.txt
+  commands: |
+    pip install --upgrade pip
+    pip install -r requirements.txt
+
 run:
   command: uvicorn src.api.main:app --host 0.0.0.0 --port 8000
+
 environment:
   variables:
     AWS_REGION: "us-east-1"
     DISABLE_AWS: "false"
     DDB_TICKET_TABLE: "tickets-dev"
     S3_BUCKET: "customer-ops-history"
-    LANGFUSE_PUBLIC_KEY: "${pk-lf-4240e47e-8319-4461-929d-3b9c332b0f80}"
-    LANGFUSE_SECRET_KEY: "${sk-lf-719e770f-a8dd-4173-a658-3bb4e4de5654}"
+    LANGFUSE_PUBLIC_KEY: "pk-lf-4240e47e-8319-4461-929d-3b9c332b0f80"
+    LANGFUSE_SECRET_KEY: "sk-lf-719e770f-a8dd-4173-a658-3bb4e4de5654"
     LANGFUSE_HOST: "https://cloud.langfuse.com"
