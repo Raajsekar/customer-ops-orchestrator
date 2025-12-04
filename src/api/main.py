@@ -91,3 +91,9 @@ def create_ticket(req: CreateTicketRequest, response: Response):
 @app.get("/health")
 def health():
     return {"status": "ok"}
+@app.get("/")
+def root():
+    return {
+        "message": "Customer Ops Orchestrator is running!",
+        "endpoints": ["/health", "/tickets", "/docs"]
+    }
