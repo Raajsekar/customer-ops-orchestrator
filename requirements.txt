@@ -1,12 +1,12 @@
 
 fastapi
 uvicorn[standard]
-pydantic>=2.0
-langgraph>=0.2.0
+pydantic
+langgraph
 langchain-core
 python-dotenv
 httpx
 boto3
 langfuse
 langsmith
-langfuse==2.27.0
+langfuse
