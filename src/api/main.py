@@ -13,8 +13,9 @@ langfuse = Langfuse(
     host=os.getenv("LANGFUSE_HOST"),
 )
 
-from ..models.ticket_state import TicketState
-from ..graph.workflow import build_graph
+from src.models.ticket_state import TicketState
+from src.graph.workflow import build_graph
+
 
 app = FastAPI(title="Customer Ops Orchestrator")
 graph = build_graph()
