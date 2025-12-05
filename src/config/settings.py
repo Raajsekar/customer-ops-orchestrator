@@ -17,8 +17,7 @@ class Settings(BaseModel):
     # support both LANGFUSE_BASE_URL and LANGFUSE_HOST
     langfuse_host: str | None = os.getenv("LANGFUSE_BASE_URL") or os.getenv("LANGFUSE_HOST")
 
-    langsmith_api_key: str | None = os.getenv("LANGSMITH_API_KEY")
-
+    
 
 @lru_cache
 def get_settings() -> Settings:
