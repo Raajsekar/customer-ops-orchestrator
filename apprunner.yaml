@@ -2,19 +2,27 @@ version: 1.0
 runtime: python3
 
 build:
-  commands: |
-    pip install --upgrade pip
-    pip install -r requirements.txt
+  # App Runner expects an array of commands here
+  commands:
+    - pip install --upgrade pip
+    - pip install -r requirements.txt
 
 run:
+  # start command (App Runner will run this in the source directory)
   command: uvicorn src.api.main:app --host 0.0.0.0 --port 8000
+
+ports:
+  - 8000
 
 environment:
   variables:
+    # DO NOT hardcode secrets here in repo; set actual secret values in App Runner console or use Secrets Manager
     AWS_REGION: "us-east-1"
     DISABLE_AWS: "false"
     DDB_TICKET_TABLE: "tickets-dev"
-    S3_BUCKET: "customer-ops-history"
+    S3_BUCKET: "enterprise-doc-store"
+    # Put placeholders here—replace them in App Runner environment UI (or use Secrets Manager)
+    S3_BUCKET: "enterprise-doc-store"
     LANGFUSE_PUBLIC_KEY: "pk-lf-4240e47e-8319-4461-929d-3b9c332b0f80"
     LANGFUSE_SECRET_KEY: "sk-lf-719e770f-a8dd-4173-a658-3bb4e4de5654"
     LANGFUSE_HOST: "https://cloud.langfuse.com"

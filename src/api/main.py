@@ -3,16 +3,20 @@ from pydantic import BaseModel
 import uuid
 import os
 from dotenv import load_dotenv
+
 load_dotenv()
 
 from langfuse import Langfuse
-langfuse = Langfuse()
+langfuse = Langfuse(
+    public_key=os.getenv("LANGFUSE_PUBLIC_KEY"),
+    secret_key=os.getenv("LANGFUSE_SECRET_KEY"),
+    host=os.getenv("LANGFUSE_HOST"),
+)
 
 from ..models.ticket_state import TicketState
 from ..graph.workflow import build_graph
 
 app = FastAPI(title="Customer Ops Orchestrator")
-
 graph = build_graph()
 
 class CreateTicketRequest(BaseModel):
@@ -30,15 +34,14 @@ class TicketResponse(BaseModel):
     trace_id: str | None = None
 
 
-@app.get("/")
-def root():
-    return {"message": "Customer Ops Orchestrator running"}
-
 @app.post("/tickets", response_model=TicketResponse)
 def create_ticket(req: CreateTicketRequest):
-    trace = langfuse.trace(
+
+    # -------- CREATE LANGFUSE TRACE --------
+    trace = langfuse.trace.create(
         name="ticket_flow",
-        input=req.model_dump()
+        input=req.model_dump(),
+        metadata={"user_id": req.user_id},
     )
 
     ticket = TicketState(
@@ -51,6 +54,7 @@ def create_ticket(req: CreateTicketRequest):
     result = graph.invoke({"ticket": ticket})
     t = result["ticket"]
 
+    # ---- UPDATE TRACE ----
     trace.update(output=t.model_dump())
 
     return TicketResponse(

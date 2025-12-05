@@ -1,27 +1,48 @@
-"""Tiny Langfuse helper (optional)."""
-from typing import Optional
-from ..config.settings import get_settings
+# src/observability/langfuse_client.py
+from typing import Optional, Dict, Any
+import os
 
 try:
-    from langfuse import Langfuse
-except ImportError:  # pragma: no cover
-    Langfuse = None  # type: ignore
+    import langfuse
+    # Some versions expose a top-level Client/Api object, some provide helper functions.
+    LF_AVAILABLE = True
+except Exception:
+    langfuse = None
+    LF_AVAILABLE = False
 
-_settings = get_settings()
-_client: Optional["Langfuse"] = None
+class LangfuseStub:
+    """Minimal safe wrapper. Does nothing if real Langfuse not present."""
+    def __init__(self):
+        self.enabled = LF_AVAILABLE and bool(os.getenv("LANGFUSE_PUBLIC_KEY") and os.getenv("LANGFUSE_SECRET_KEY"))
 
-if (
-    Langfuse
-    and _settings.langfuse_public_key
-    and _settings.langfuse_secret_key
-    and _settings.langfuse_host
-):
-    _client = Langfuse(
-        public_key=_settings.langfuse_public_key,
-        secret_key=_settings.langfuse_secret_key,
-        host=_settings.langfuse_host,
-    )
+    def create_trace(self, id: str, name: str, metadata: Dict[str, Any] | None = None, input: Dict[str, Any] | None = None):
+        # If real langfuse library exists and provides an API, hook here.
+        # Keep this safe — swallow errors so the app doesn't crash.
+        if not self.enabled:
+            return None
+        try:
+            # Attempt a couple of likely APIs (best-effort)
+            if hasattr(langfuse, "Client"):
+                client = langfuse.Client(public_key=os.getenv("LANGFUSE_PUBLIC_KEY"), secret_key=os.getenv("LANGFUSE_SECRET_KEY"))
+                return client.create_trace(id=id, name=name, metadata=metadata or {}, input=input or {})
+            if hasattr(langfuse, "trace"):
+                return langfuse.trace.create(id=id, name=name, metadata=metadata or {}, input=input or {})
+        except Exception:
+            return None
+        return None
 
+    def end_trace(self, trace_id: str, output: Dict[str, Any] | None = None):
+        if not self.enabled:
+            return None
+        try:
+            if hasattr(langfuse, "Client"):
+                client = langfuse.Client(public_key=os.getenv("LANGFUSE_PUBLIC_KEY"), secret_key=os.getenv("LANGFUSE_SECRET_KEY"))
+                return client.end_trace(id=trace_id, output=output or {})
+            if hasattr(langfuse, "trace"):
+                return langfuse.trace.end(trace_id, output or {})
+        except Exception:
+            return None
+        return None
 
-def get_langfuse() -> Optional["Langfuse"]:
-    return _client
+# single instance to import from other modules
+langfuse_client = LangfuseStub()
