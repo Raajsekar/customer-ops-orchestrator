@@ -1,12 +1,10 @@
-fastapi==0.110.0
-uvicorn[standard]==0.29.0
-pydantic==2.6.1
-langgraph==0.0.61
-langchain-core==0.1.33
-python-dotenv==1.0.1
-httpx==0.27.0
-boto3==1.34.34
-
-# Observability
-langfuse-python==2.27.0
-langsmith==0.1.68
+fastapi
+uvicorn[standard]
+pydantic
+langgraph
+langchain-core
+python-dotenv
+httpx
+boto3
+langfuse
+langsmith
